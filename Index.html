@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Dino Run Telegram</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://adsgram.ai/sdk.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Courier New', Courier, monospace; background: #f7f7f7; touch-action: manipulation; }
+        #game-container { position: relative; width: 100vw; height: 300px; background: #fff; border-bottom: 2px solid #535353; margin-top: 50px; }
+        #dino { position: absolute; bottom: 0; left: 50px; width: 40px; height: 40px; background: #535353; border-radius: 4px; }
+        .cactus { position: absolute; bottom: 0; width: 20px; height: 40px; background: #ff4d4d; border-radius: 2px; }
+        #score { position: absolute; top: 10px; right: 20px; font-size: 20px; color: #535353; }
+        
+        /* Game Over Overlay */
+        #overlay { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.8); display: none; 
+            flex-direction: column; align-items: center; justify-content: center; color: white; text-align: center;
+        }
+        button { 
+            padding: 15px 25px; font-size: 18px; margin: 10px; cursor: pointer; border: none; border-radius: 5px; font-weight: bold;
+        }
+        #btn-revive { background: #4CAF50; color: white; }
+        #btn-restart { background: #535353; color: white; }
+    </style>
+</head>
+<body>
+
+    <div id="score">Score: 0</div>
+    <div id="game-container" onclick="jump()">
+        <div id="dino"></div>
+    </div>
+
+    <div id="overlay">
+        <h1>GAME OVER</h1>
+        <p id="final-score"></p>
+        <button id="btn-revive" onclick="handleReviveAd()">📺 WATCH AD TO REVIVE</button>
+        <button id="btn-restart" onclick="resetGame()">RESTART</button>
+    </div>
+
+<script>
+    const dino = document.getElementById("dino");
+    const container = document.getElementById("game-container");
+    const scoreElement = document.getElementById("score");
+    const overlay = document.getElementById("overlay");
+    
+    let isJumping = false;
+    let score = 0;
+    let gameActive = true;
+    let obstacleTimeout;
+
+    // Initialize Adsgram
+    // REPLACE "YOUR_BLOCK_ID" with your actual ID from Adsgram dashboard
+    const AdController = window.Adsgram.init({ blockId: "YOUR_BLOCK_ID" });
+
+    function jump() {
+        if (isJumping || !gameActive) return;
+        isJumping = true;
+        let position = 0;
+        let timer = setInterval(() => {
+            if (position >= 120) {
+                clearInterval(timer);
+                let downTimer = setInterval(() => {
+                    if (position <= 0) {
+                        clearInterval(downTimer);
+                        isJumping = false;
+                    }
+                    position -= 5;
+                    dino.style.bottom = position + "px";
+                }, 20);
+            }
+            position += 5;
+            dino.style.bottom = position + "px";
+        }, 20);
+    }
+
+    function createCactus() {
+        if (!gameActive) return;
+        const cactus = document.createElement("div");
+        cactus.classList.add("cactus");
+        container.appendChild(cactus);
+        let cactusPos = window.innerWidth;
+        cactus.style.left = cactusPos + "px";
+
+        let timer = setInterval(() => {
+            if (cactusPos < -20) {
+                clearInterval(timer);
+                container.removeChild(cactus);
+                if (gameActive) {
+                    score++;
+                    scoreElement.innerText = "Score: " + score;
+                }
+            }
+            
+            // Collision Detection
+            if (cactusPos > 50 && cactusPos < 90 && parseInt(dino.style.bottom) < 40) {
+                gameOver();
+                clearInterval(timer);
+            }
+
+            cactusPos -= 7 + (score / 10); // Speed increases as score goes up
+            cactus.style.left = cactusPos + "px";
+        }, 20);
+
+        obstacleTimeout = setTimeout(createCactus, Math.random() * 2000 + 1000);
+    }
+
+    function gameOver() {
+        gameActive = false;
+        clearTimeout(obstacleTimeout);
+        overlay.style.display = "flex";
+        document.getElementById("final-score").innerText = "Final Score: " + score;
+    }
+
+    function resetGame() {
+        score = 0;
+        scoreElement.innerText = "Score: 0";
+        gameActive = true;
+        overlay.style.display = "none";
+        // Remove existing cacti
+        document.querySelectorAll('.cactus').forEach(c => c.remove());
+        createCactus();
+    }
+
+    async function handleReviveAd() {
+        try {
+            // Show the ad
+            const result = await AdController.show();
+            
+            if (result.done) {
+                // User watched the whole ad!
+                revivePlayer();
+            } else {
+                alert("You must finish the video to revive!");
+            }
+        } catch (e) {
+            console.error("Ad failed", e);
+            alert("No ads available right now.");
+        }
+    }
+
+    function revivePlayer() {
+        gameActive = true;
+        overlay.style.display = "none";
+        document.querySelectorAll('.cactus').forEach(c => c.remove());
+        createCactus();
+        // Notify Telegram that the user did something cool
+        window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+    }
+
+    // Start the game
+    window.Telegram.WebApp.ready();
+    window.Telegram.WebApp.expand();
+    createCactus();
+
+</script>
+</body>
+</html>
